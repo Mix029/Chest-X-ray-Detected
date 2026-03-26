@@ -1,0 +1,46 @@
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* ลบสไตล์ที่อาจจะทับกับ Ant Design Dark Mode */
+.ant-layout {
+  background: transparent !important;
+}
+
+.ant-card {
+  transition: background-color 0.3s, border-color 0.3s !important;
+}
+
+/* ปรับแต่ง Scrollbar สำหรับ Dark Mode */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* ป้องกันปัญหาการ Print แล้วสีเพี้ยน */
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+}
