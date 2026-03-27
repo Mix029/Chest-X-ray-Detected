@@ -16,10 +16,21 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // เชื่อมต่อภาพจาก Inference Server เพื่อแสดงผลหน้า Result
 app.use('/outputs', express.static(path.join(__dirname, '..', '..', 'medical-ai-inference', 'outputs')));
 
-// DB Connection (Placeholder - user should have MongoDB running)
-mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/medical-db')
-  .then(() => console.log('MongoDB Connected'))
-  .catch(err => console.log('DB Connection Error: ', err));
+// DB Connection
+const connectDB = async () => {
+  try {
+    const conn = await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/medical-db', {
+      serverSelectionTimeoutMS: 5000,
+    });
+    console.log(`MongoDB Connected: ${conn.connection.host}`);
+  } catch (err) {
+    console.error(`DB Connection Error: ${err.message}`);
+    // If we can't connect, the app will have issues. 
+    // We could either exit or just log and let it retry (Mongoose does retries by default).
+  }
+};
+
+connectDB();
 
 // Routes
 app.get('/', (req, res) => {

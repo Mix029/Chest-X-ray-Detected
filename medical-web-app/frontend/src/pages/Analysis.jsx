@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Card, Select, Upload, Button, message, Divider, Descriptions, Empty, Row, Col, Typography } from 'antd';
+import { Card, Select, Upload, Button, message, Divider, Descriptions, Empty, Row, Col, Typography, Tag } from 'antd';
 import { UploadOutlined, SearchOutlined, LoadingOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -114,6 +114,7 @@ const AnalysisPage = () => {
                   <Descriptions.Item label="Name"><Text strong>{selectedPatient.firstName} {selectedPatient.lastName}</Text></Descriptions.Item>
                   <Descriptions.Item label="ID">{selectedPatient.patientId}</Descriptions.Item>
                   <Descriptions.Item label="Age/Gender">{selectedPatient.age} / {selectedPatient.gender}</Descriptions.Item>
+                  <Descriptions.Item label="Blood Group"><Tag color="volcano">{selectedPatient.bloodGroup || 'N/A'}</Tag></Descriptions.Item>
                 </Descriptions>
               </div>
             ) : (

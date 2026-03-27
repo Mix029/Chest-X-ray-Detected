@@ -46,8 +46,18 @@ router.post('/predict', auth(['doctor', 'assistant', 'admin']), upload.single('i
       headers: form.getHeaders()
     });
 
-    const { prediction, confidence } = response.data;
+    const { prediction, confidence, actual_label } = response.data;
+    const classNames = ['COVID-19', 'Lung_Opacity', 'Normal', 'Viral_Pneumonia'];
     
+    // Map probabilities from AI results
+    let allProbabilities = [];
+    if (Array.isArray(confidence[0])) {
+      allProbabilities = confidence[0].map((prob, index) => ({
+        label: classNames[index],
+        confidence: prob
+      }));
+    }
+
     // 2. อัปโหลดภาพต้นฉบับขึ้น Cloudinary
     const uploadOrig = await cloudinary.uploader.upload(localFilePath, {
       folder: 'medical_ai/originals',
@@ -79,7 +89,9 @@ router.post('/predict', auth(['doctor', 'assistant', 'admin']), upload.single('i
       originalImagePath: uploadOrig.secure_url,
       gradcamImagePath: gradcamUrl || uploadOrig.secure_url, // Fallback เป็นภาพเดิมถ้าไม่เจอ GC
       prediction,
-      confidence: Array.isArray(confidence[0]) ? Math.max(...confidence[0]) : confidence
+      actualResult: actual_label, // Save ground truth from inference
+      confidence: Array.isArray(confidence[0]) ? Math.max(...confidence[0]) : confidence,
+      allProbabilities: allProbabilities
     });
 
     await newAnalysis.save();
@@ -95,8 +107,11 @@ router.post('/predict', auth(['doctor', 'assistant', 'admin']), upload.single('i
     res.json(newAnalysis);
   } catch (err) {
     if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
-    console.error('Analysis Error:', err.message);
-    res.status(500).send('Server error during analysis');
+    console.error('Analysis Error Detail:', err.response ? err.response.data : err.message);
+    res.status(500).json({ 
+      msg: 'Server error during analysis', 
+      error: err.response ? err.response.data : err.message 
+    });
   }
 });
 

@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { Table, Button, Modal, Form, Input, Select, Space, message, Popconfirm, Row, Col, List, Tag, Card, Typography } from 'antd';
-import { UserAddOutlined, EditOutlined, DeleteOutlined, HistoryOutlined } from '@ant-design/icons';
+import { UserAddOutlined, EditOutlined, DeleteOutlined, HistoryOutlined, PhoneOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { ThemeContext } from '../context/ThemeContext';
+import { AuthContext } from '../context/AuthContext';
 
 const { Option } = Select;
 const { Title, Text } = Typography;
 
 const PatientsPage = () => {
   const { isDarkMode } = useContext(ThemeContext);
+  const { user } = useContext(AuthContext);
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -92,7 +94,7 @@ const PatientsPage = () => {
     }
   };
 
-  const columns = [
+  const baseColumns = [
     { 
       title: 'Patient ID', 
       dataIndex: 'patientId', 
@@ -112,38 +114,61 @@ const PatientsPage = () => {
       render: (age) => `${age}Y` 
     },
     { 
+      title: 'Gender', 
+      dataIndex: 'gender', 
+      key: 'gender',
+      render: (gender) => (
+        <Tag color={gender === 'Male' ? 'blue' : gender === 'Female' ? 'magenta' : 'default'}>
+          {gender}
+        </Tag>
+      )
+    },
+    { 
       title: 'Blood', 
       dataIndex: 'bloodGroup', 
       key: 'bloodGroup', 
       render: (bg) => <Tag color="volcano">{bg || 'N/A'}</Tag>
-    },
-    {
-      title: 'Action',
-      key: 'action',
-      align: 'right',
-      render: (_, record) => (
-        <Space size="small">
-          <Button 
-            type="primary" 
-            ghost 
-            size="small" 
-            icon={<HistoryOutlined />} 
-            onClick={() => goToTimeline(record.patientId)}
-          >
-            History
-          </Button>
-          <Button 
-            size="small" 
-            icon={<EditOutlined />} 
-            onClick={() => showModal(record)} 
-          />
-          <Popconfirm title="Delete this patient?" onConfirm={() => deletePatient(record._id)}>
-            <Button danger ghost size="small" icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
-      ),
-    },
+    }
   ];
+
+  // Add Contact column for Admin and Assistant
+  if (user && (user.role === 'admin' || user.role === 'assistant')) {
+    baseColumns.push({
+      title: 'Contact',
+      dataIndex: 'contact',
+      key: 'contact',
+      render: (contact) => contact ? <Space><PhoneOutlined style={{ color: '#8c8c8c' }} />{contact}</Space> : <Text type="secondary">-</Text>
+    });
+  }
+
+  const actionColumn = {
+    title: 'Action',
+    key: 'action',
+    align: 'right',
+    render: (_, record) => (
+      <Space size="small">
+        <Button 
+          type="primary" 
+          ghost 
+          size="small" 
+          icon={<HistoryOutlined />} 
+          onClick={() => goToTimeline(record.patientId)}
+        >
+          History
+        </Button>
+        <Button 
+          size="small" 
+          icon={<EditOutlined />} 
+          onClick={() => showModal(record)} 
+        />
+        <Popconfirm title="Delete this patient?" onConfirm={() => deletePatient(record._id)}>
+          <Button danger ghost size="small" icon={<DeleteOutlined />} />
+        </Popconfirm>
+      </Space>
+    ),
+  };
+
+  const columns = [...baseColumns, actionColumn];
 
   return (
     <div style={{ padding: '0' }}>

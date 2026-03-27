@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Table, Tag, Space, Button, Card, Input, message, Modal, Row, Col, Typography, Divider, Progress, Descriptions, Popconfirm, Timeline, Avatar } from 'antd';
+import { Table, Tag, Space, Button, Card, Input, message, Modal, Row, Col, Typography, Divider, Progress, Descriptions, Popconfirm, Timeline, Avatar, Alert } from 'antd';
 import { 
   FileSearchOutlined, 
   ReloadOutlined, 
@@ -12,7 +12,8 @@ import {
   PhoneOutlined,
   IdcardOutlined,
   CheckCircleOutlined,
-  HistoryOutlined
+  HistoryOutlined,
+  ExclamationCircleOutlined
 } from '@ant-design/icons';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
@@ -30,6 +31,7 @@ const HistoryPage = () => {
   const [allRecords, setAllRecords] = useState([]); 
   const [patientGroups, setPatientGroups] = useState([]); 
   const [filteredGroups, setFilteredGroups] = useState([]); 
+  const [patientMap, setPatientMap] = useState({});
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   
@@ -42,15 +44,35 @@ const HistoryPage = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
 
+  // Delete Confirmation State
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [recordToDelete, setRecordToDelete] = useState(null);
+  const [confirmTextInput, setConfirmTextInput] = useState('');
+
   const fetchHistory = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('http://localhost:5000/api/analysis/history', {
-        headers: { 'x-auth-token': token }
+      
+      // Fetch both history and patients to map names
+      const [historyRes, patientsRes] = await Promise.all([
+        axios.get('http://localhost:5000/api/analysis/history', {
+          headers: { 'x-auth-token': token }
+        }),
+        axios.get('http://localhost:5000/api/patients', {
+          headers: { 'x-auth-token': token }
+        })
+      ]);
+
+      // Create name map
+      const map = {};
+      patientsRes.data.forEach(p => {
+        map[p.patientId] = `${p.firstName} ${p.lastName}`;
       });
-      setAllRecords(res.data);
-      groupDataByPatient(res.data);
+      setPatientMap(map);
+
+      setAllRecords(historyRes.data);
+      groupDataByPatient(historyRes.data);
     } catch (err) {
       message.error('Failed to fetch history');
     }
@@ -111,28 +133,71 @@ const HistoryPage = () => {
   };
 
   useEffect(() => {
-    const filtered = patientGroups.filter(group => 
-      group.patientId.toLowerCase().includes(searchText.toLowerCase())
-    );
+    const filtered = patientGroups.filter(group => {
+      const name = (patientMap[group.patientId] || '').toLowerCase();
+      const id = group.patientId.toLowerCase();
+      const search = searchText.toLowerCase();
+      return id.includes(search) || name.includes(search);
+    });
     setFilteredGroups(filtered);
-  }, [searchText, patientGroups]);
+  }, [searchText, patientGroups, patientMap]);
 
   const showDetails = (record) => {
     setSelectedRecord(record);
     setIsModalVisible(true);
   };
 
-  const deleteRecord = async (id) => {
+  const openDeleteModal = (e, record) => {
+    e.stopPropagation(); // Prevent opening details modal
+    setRecordToDelete(record);
+    setConfirmTextInput('');
+    setDeleteModalVisible(true);
+  };
+
+  const confirmDelete = async () => {
+    if (confirmTextInput !== 'ยืนยันการลบ') {
+      message.error('โปรดพิมพ์คำยืนยันให้ถูกต้อง');
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`http://localhost:5000/api/analysis/${id}`, {
+      await axios.delete(`http://localhost:5000/api/analysis/${recordToDelete._id}`, {
         headers: { 'x-auth-token': token }
       });
-      message.success('Record deleted');
-      fetchHistory();
-      if (selectedPatientGroup?.records.length <= 1) {
-        setSelectedPatientGroup(null);
+      message.success('Record deleted successfully');
+      setDeleteModalVisible(false);
+      
+      // Update local state to reflect deletion without full reload
+      const updatedGroups = patientGroups.map(group => {
+        if (group.patientId === recordToDelete.patientId) {
+          const updatedRecords = group.records.filter(r => r._id !== recordToDelete._id);
+          return {
+            ...group,
+            records: updatedRecords,
+            recordCount: updatedRecords.length
+          };
+        }
+        return group;
+      }).filter(group => group.recordCount > 0);
+
+      setPatientGroups(updatedGroups);
+      
+      // Update selected patient group if needed
+      if (selectedPatientGroup && selectedPatientGroup.patientId === recordToDelete.patientId) {
+        const updatedSelectedRecords = selectedPatientGroup.records.filter(r => r._id !== recordToDelete._id);
+        if (updatedSelectedRecords.length === 0) {
+          setSelectedPatientGroup(null);
+        } else {
+          setSelectedPatientGroup({
+            ...selectedPatientGroup,
+            records: updatedSelectedRecords,
+            recordCount: updatedSelectedRecords.length
+          });
+        }
       }
+      
+      fetchHistory(); // Refresh to ensure sync
     } catch (err) {
       message.error('Failed to delete');
     }
@@ -146,6 +211,7 @@ const HistoryPage = () => {
 
   const masterColumns = [
     { title: 'Patient ID', dataIndex: 'patientId', key: 'patientId', render: (id) => <Space><UserOutlined style={{ color: '#1890ff' }} /><Text strong>{id}</Text></Space> },
+    { title: 'Name', key: 'name', render: (_, record) => <Text>{patientMap[record.patientId] || 'N/A'}</Text> },
     { title: 'Total Records', dataIndex: 'recordCount', key: 'recordCount', align: 'center', render: (count) => <Tag color="blue">{count} Visits</Tag> },
     { title: 'Last Analysis', dataIndex: 'lastAnalysis', key: 'lastAnalysis', render: (date) => <Space><CalendarOutlined style={{ color: '#8c8c8c' }} />{new Date(date).toLocaleDateString()}</Space> },
     { title: 'Action', key: 'action', align: 'right', render: (_, record) => <Button type="primary" ghost onClick={() => handleSelectPatient(record)}>View Timeline</Button> },
@@ -270,7 +336,19 @@ const HistoryPage = () => {
                             <Tag color={rec.prediction === 'Normal' ? 'green' : 'red'} style={{ margin: 0, fontWeight: 'bold', fontSize: '11px' }}>{rec.prediction.toUpperCase()}</Tag>
                             <Text strong style={{ fontSize: '13px' }}>{(rec.confidence * 100).toFixed(1)}% Confidence</Text>
                           </Space>
-                          <Button type="link" size="small" icon={<FileSearchOutlined />} style={{ fontSize: '12px' }}>Report</Button>
+                          <Space>
+                            <Button type="link" size="small" icon={<FileSearchOutlined />} style={{ fontSize: '12px' }}>Report</Button>
+                            {user?.role === 'admin' && (
+                              <Button 
+                                type="text" 
+                                danger 
+                                size="small" 
+                                icon={<DeleteOutlined />} 
+                                onClick={(e) => openDeleteModal(e, rec)}
+                                style={{ fontSize: '12px' }}
+                              />
+                            )}
+                          </Space>
                         </div>
                       </Card>
                     ),
@@ -301,6 +379,17 @@ const HistoryPage = () => {
               <Title level={2} style={{ color: '#1890ff', margin: 0, letterSpacing: '1px' }}>MEDICAL AI ANALYSIS REPORT</Title>
               <Text type="secondary" style={{ fontSize: '14px' }}>Senior Project MIX - Clinical Decision Support Platform</Text>
             </div>
+
+            {selectedRecord.confidence < 0.9 && (
+              <Alert
+                message="Attention: Low AI Confidence Warning"
+                description={`This diagnostic result was generated with a confidence level of ${(selectedRecord.confidence * 100).toFixed(1)}%. Further clinical verification by a radiologist is highly recommended.`}
+                type="warning"
+                showIcon
+                style={{ marginBottom: '24px', borderRadius: '8px' }}
+              />
+            )}
+
             <div style={{ display: 'flex', gap: '20px', marginBottom: '30px' }}>
               <div style={{ flex: 1 }}>
                 <Text strong style={{ fontSize: '15px', display: 'block', marginBottom: '10px', textAlign: 'center' }}>[1] Original Image</Text>
@@ -316,10 +405,46 @@ const HistoryPage = () => {
               </div>
             </div>
             <Divider orientation="left" style={{ borderColor: '#1890ff' }}>Analysis Findings</Divider>
-            <div style={{ display: 'flex', justifyContent: 'space-between', backgroundColor: isDarkMode ? '#1d1d1d' : '#f9f9f9', padding: '25px', borderRadius: '12px', border: isDarkMode ? '1px solid #303030' : '1px solid #f0f0f0', marginBottom: '30px' }}>
-              <div style={{ flex: 1, borderRight: '1px solid #303030', paddingRight: '20px' }}><Text type="secondary">Diagnosis</Text><br/><Tag color={selectedRecord.prediction === 'Normal' ? 'green' : 'red'} style={{ fontSize: '20px', padding: '5px 15px', height: 'auto', fontWeight: 'bold' }}>{selectedRecord.prediction.toUpperCase()}</Tag></div>
-              <div style={{ flex: 1, borderRight: '1px solid #303030', padding: '0 20px' }}><Text type="secondary">Confidence</Text><div style={{ fontSize: '28px', fontWeight: 'bold', color: '#1890ff' }}>{(selectedRecord.confidence * 100).toFixed(1)}%</div></div>
-              <div style={{ flex: 1, paddingLeft: '20px' }}><Text type="secondary">Date</Text><div style={{ fontSize: '16px', fontWeight: '600' }}>{new Date(selectedRecord.timestamp).toLocaleDateString('en-GB')}</div></div>
+            <div style={{ backgroundColor: isDarkMode ? '#1d1d1d' : '#f9f9f9', padding: '20px', borderRadius: '12px', border: isDarkMode ? '1px solid #303030' : '1px solid #f0f0f0', marginBottom: '30px' }}>
+              <Row gutter={24} align="middle">
+                <Col span={8} style={{ borderRight: '1px solid #d9d9d9' }}>
+                  <Text type="secondary">Primary Diagnosis</Text><br/>
+                  <Tag color={selectedRecord.prediction === 'Normal' ? 'green' : 'red'} style={{ fontSize: '18px', padding: '5px 10px', height: 'auto', fontWeight: 'bold', marginTop: '5px' }}>
+                    {selectedRecord.prediction.toUpperCase()}
+                  </Tag>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1890ff', marginTop: '5px' }}>
+                    {(selectedRecord.confidence * 100).toFixed(1)}%
+                  </div>
+                </Col>
+                
+                <Col span={8} style={{ borderRight: '1px solid #d9d9d9' }}>
+                  <Text type="secondary">Secondary Consideration</Text><br/>
+                  {selectedRecord.allProbabilities && selectedRecord.allProbabilities.length > 1 ? (
+                    (() => {
+                      const sorted = [...selectedRecord.allProbabilities].sort((a, b) => b.confidence - a.confidence);
+                      const secondary = sorted[1];
+                      return (
+                        <>
+                          <Tag color="orange" style={{ fontSize: '14px', marginTop: '5px' }}>{secondary.label.toUpperCase()}</Tag>
+                          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#fa8c16', marginTop: '5px' }}>
+                            {(secondary.confidence * 100).toFixed(1)}%
+                          </div>
+                        </>
+                      );
+                    })()
+                  ) : (
+                    <div style={{ marginTop: '10px' }}><Text type="secondary">N/A (Legacy Data)</Text></div>
+                  )}
+                </Col>
+
+                <Col span={8}>
+                  <Text type="secondary">Analysis Date</Text>
+                  <div style={{ fontSize: '16px', fontWeight: '600', marginTop: '10px' }}>
+                    {new Date(selectedRecord.timestamp).toLocaleDateString('en-GB')}
+                  </div>
+                  <Text type="secondary">{new Date(selectedRecord.timestamp).toLocaleTimeString()}</Text>
+                </Col>
+              </Row>
             </div>
             <Descriptions title="Document Info" bordered size="small" column={2}>
               <Descriptions.Item label="Patient ID">{selectedRecord.patientId}</Descriptions.Item>
@@ -330,6 +455,44 @@ const HistoryPage = () => {
             <div style={{ marginTop: '60px' }}><Row justify="end"><Col span={10} style={{ textAlign: 'center' }}><div style={{ borderBottom: isDarkMode ? '1px solid #fff' : '1px solid #000', height: '60px', marginBottom: '10px' }}></div><Text strong>Authorized Radiologist Signature</Text></Col></Row></div>
           </div>
         )}
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        title={
+          <Space>
+            <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />
+            <span>ยืนยันการลบรายงานวิเคราะห์</span>
+          </Space>
+        }
+        open={deleteModalVisible}
+        onCancel={() => setDeleteModalVisible(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setDeleteModalVisible(false)}>
+            ยกเลิก
+          </Button>,
+          <Button 
+            key="delete" 
+            type="primary" 
+            danger 
+            onClick={confirmDelete}
+            disabled={confirmTextInput !== 'ยืนยันการลบ'}
+          >
+            ลบข้อมูลถาวร
+          </Button>
+        ]}
+      >
+        <div style={{ marginBottom: '20px' }}>
+          <Text>การลบรายงานนี้จะส่งผลให้ข้อมูลหายไปจากระบบโดยไม่สามารถกู้คืนได้</Text>
+          <br />
+          <Text type="danger" strong>โปรดพิมพ์คำว่า "ยืนยันการลบ" เพื่อยืนยันความต้องการ:</Text>
+        </div>
+        <Input 
+          placeholder="พิมพ์คำว่า: ยืนยันการลบ" 
+          value={confirmTextInput} 
+          onChange={(e) => setConfirmTextInput(e.target.value)}
+          status={confirmTextInput && confirmTextInput !== 'ยืนยันการลบ' ? 'error' : ''}
+        />
       </Modal>
     </div>
   );

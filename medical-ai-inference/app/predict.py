@@ -10,9 +10,9 @@ from utils.lung_preprocess import apply_lung_mask
 from utils.gradcam import apply_gradcam
 
 # =========================
-# Classes (ต้องตรงกับตอน train)
+# Classes (Standardized)
 # =========================
-classes = ['COVID', 'Lung_Opacity', 'Normal', 'Viral Pneumonia']
+classes = ['COVID', 'Lung_Opacity', 'Normal', 'Viral_Pneumonia']
 
 # =========================
 # Device
@@ -106,6 +106,23 @@ def predict(image_path, debug=True):
 
     print(f"Saved: {output_path}")
     # =========================
+    # EXTRACT ACTUAL LABEL (Standardized)
+    # =========================
+    parent_dir = os.path.basename(os.path.dirname(image_path)).lower()
+    filename_lower = filename.lower()
+    context = f"{parent_dir}_{filename_lower}"
+
+    actual_label = "Unknown"
+    if "normal" in context:
+        actual_label = "Normal"
+    elif "lung_opacity" in context or "opacity" in context:
+        actual_label = "Lung_Opacity"
+    elif "covid" in context:
+        actual_label = "COVID"
+    elif "pneumonia" in context:
+        actual_label = "Viral_Pneumonia"
+
+    # =========================
     # DEBUG
     # =========================
     if debug:
@@ -114,6 +131,7 @@ def predict(image_path, debug=True):
         print("Softmax probs:", probs.cpu().numpy())
         print("Pred index:", pred_idx)
         print("Pred label:", pred_label)
+        print("Actual label:", actual_label)
         print("----------------")
 
-    return pred_label, probs.cpu().numpy().tolist()
+    return pred_label, probs.cpu().numpy().tolist(), actual_label

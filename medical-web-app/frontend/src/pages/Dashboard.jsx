@@ -30,7 +30,41 @@ const Dashboard = () => {
       const res = await axios.get('http://localhost:5000/api/analysis/stats', {
         headers: { 'x-auth-token': token }
       });
-      setStats(res.data);
+      
+      const data = res.data;
+      
+      // ✅ Map and Group Distribution data to prevent duplicates
+      const nameMapping = {
+        'COVID': 'COVID-19',
+        'COVID-19': 'COVID-19',
+        'Viral Pneumonia': 'Viral_Pneumonia',
+        'Viral_Pneumonia': 'Viral_Pneumonia',
+        'Lung Opacity': 'Lung_Opacity',
+        'Lung_Opacity': 'Lung_Opacity',
+        'Normal': 'Normal'
+      };
+
+      const groupedDist = {};
+      data.distribution.forEach(item => {
+        const mappedName = nameMapping[item.name] || item.name;
+        if (!groupedDist[mappedName]) {
+          groupedDist[mappedName] = { name: mappedName, value: 0, totalConf: 0, count: 0 };
+        }
+        groupedDist[mappedName].value += item.value;
+        groupedDist[mappedName].totalConf += (item.avgConf * item.value);
+        groupedDist[mappedName].count += item.value;
+      });
+
+      const finalDistribution = Object.values(groupedDist).map(item => ({
+        name: item.name,
+        value: item.value,
+        avgConf: item.count > 0 ? item.totalConf / item.count : 0
+      }));
+
+      setStats({
+        ...data,
+        distribution: finalDistribution
+      });
     } catch (err) {
       console.error('Failed to fetch stats');
     }

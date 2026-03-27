@@ -6,7 +6,12 @@ const AnalysisSchema = new mongoose.Schema({
   originalImagePath: { type: String, required: true },
   gradcamImagePath: { type: String },
   prediction: { type: String, required: true },
+  actualResult: { type: String }, // Store ground truth for accuracy check
   confidence: { type: Number, required: true },
+  allProbabilities: [{
+    label: String,
+    confidence: Number
+  }],
   timestamp: { type: Date, default: Date.now }
 });
 

@@ -144,7 +144,7 @@ const SettingPage = () => {
                   </Select>
                 </Form.Item>
                 <Form.Item label="Confidence Threshold (%)" tooltip="Alert when AI confidence is below this value">
-                  <Slider defaultValue={75} marks={{ 0: '0%', 75: '75%', 100: '100%' }} />
+                  <Slider defaultValue={90} marks={{ 0: '0%', 90: '90%', 100: '100%' }} />
                 </Form.Item>
                 <Form.Item label="Real-time Inference">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
